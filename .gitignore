@@ -1,0 +1,34 @@
+# Build
+build/
+*.elf
+*.bin
+*.hex
+*.uf2
+*.map
+*.dis
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!pico_sdk_import.cmake
+
+# SDK (use PICO_SDK_PATH or clone separately)
+pico-sdk/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Picotool / SDK fetch
+_deps/
