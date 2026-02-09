@@ -7,6 +7,7 @@ pico_sdk_init()
 
 add_executable(amplified_mouse
   main.c
+  settings.c
   usb_descriptors.c
 )
 
@@ -17,6 +18,7 @@ target_include_directories(amplified_mouse PRIVATE
 target_link_libraries(amplified_mouse PRIVATE
   pico_stdlib
   pico_unique_id
+  hardware_flash
   tinyusb_device
   tinyusb_board
 )

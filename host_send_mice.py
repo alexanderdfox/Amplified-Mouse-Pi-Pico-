@@ -21,7 +21,9 @@ except ImportError:
     sys.exit(1)
 
 SYNC = 0xAA
-NUM_MICE = 6
+# Packet matches firmware: 1 sync + 6*(dx,dy) + buttons + wheel = 15 bytes. Firmware uses first config.NUM_MICE.
+PACKET_LEN = 15
+NUM_MICE_MAX = 6
 
 
 def find_mice(limit=6):
@@ -47,29 +49,27 @@ def main():
     ap.add_argument("--baud", type=int, default=115200, help="Baud rate")
     args = ap.parse_args()
 
-    mice = find_mice(NUM_MICE)
-    if len(mice) < NUM_MICE:
-        print(f"Warning: found {len(mice)} mice, need {NUM_MICE}. Connect more mice or use with fewer.", file=sys.stderr)
-    # Pad to 6 with dummy state
-    while len(mice) < NUM_MICE:
+    mice = find_mice(NUM_MICE_MAX)
+    if len(mice) < NUM_MICE_MAX:
+        print(f"Warning: found {len(mice)} mice (firmware may use fewer; check config.yaml).", file=sys.stderr)
+    while len(mice) < NUM_MICE_MAX:
         mice.append(None)
 
     ser = serial.Serial(args.port, args.baud, timeout=0)
-    # Per-mouse state: (dx, dy, buttons, wheel)
-    state = [[0, 0, 0, 0] for _ in range(NUM_MICE)]
+    state = [[0, 0, 0, 0] for _ in range(NUM_MICE_MAX)]
 
     def make_packet():
-        buf = bytearray(15)
+        buf = bytearray(PACKET_LEN)
         buf[0] = SYNC
-        for i in range(NUM_MICE):
+        for i in range(NUM_MICE_MAX):
             dx, dy, btns, wheel = state[i]
             buf[1 + i * 2] = dx & 0xFF
             buf[2 + i * 2] = dy & 0xFF
         buf[13] = 0
-        for i in range(NUM_MICE):
+        for i in range(NUM_MICE_MAX):
             buf[13] |= state[i][2] & 0x07
         buf[14] = 0
-        for i in range(NUM_MICE):
+        for i in range(NUM_MICE_MAX):
             w = state[i][3]
             if w > 127:
                 w = 127
@@ -80,10 +80,9 @@ def main():
             buf[14] -= 256  # signed
         return buf
 
-    # Reset deltas each frame; we send one packet per poll
-    for i in range(NUM_MICE):
+    for i in range(NUM_MICE_MAX):
         state[i][0] = state[i][1] = 0
-        state[i][3] = 0  # wheel reset each frame
+        state[i][3] = 0
 
     active = [m for m in mice if m is not None]
     if not active:
@@ -112,8 +111,7 @@ def main():
                                 state[i][2] |= 1 << bit
                             else:
                                 state[i][2] &= ~(1 << bit)
-        # Clamp dx/dy to signed 8-bit per mouse
-        for i in range(NUM_MICE):
+        for i in range(NUM_MICE_MAX):
             for j in (0, 1):
                 if state[i][j] > 127:
                     state[i][j] = 127
@@ -121,8 +119,7 @@ def main():
                     state[i][j] = -128
         pkt = make_packet()
         ser.write(pkt)
-        # Reset deltas for next frame (buttons stay)
-        for i in range(NUM_MICE):
+        for i in range(NUM_MICE_MAX):
             state[i][0] = state[i][1] = 0
             state[i][3] = 0
 
