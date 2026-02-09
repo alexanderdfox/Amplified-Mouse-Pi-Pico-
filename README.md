@@ -1,6 +1,6 @@
 # 6-Input Amplified Mouse (Raspberry Pi Pico)
 
-Aggregates **6 mouse inputs** into a single USB HID mouse with optional **amplification** (scale factor on combined movement). The Pico appears as one mouse to the PC; you can feed it from 6 physical mice via a host (UART or USB host hardware).
+Aggregates **6 mouse inputs** into a single USB HID mouse with optional **amplification** (scale factor on combined movement), or presents them as **6 separate HID mice** (one cursor per input). The Pico appears as either one or six mice to the PC; you can feed it from 6 physical mice via a host (UART or USB host hardware).
 
 ## Use cases
 
@@ -137,7 +137,7 @@ python3 send_settings.py --port /dev/tty.usbmodem101 --no-save
 python3 send_settings.py --port /dev/ttyACM0 --num-mice 4 --logic-mode or
 ```
 
-Config packet format (UART): sync `0x55` `0xCF`, command `0x01`, then 7 bytes: `num_mice`, `logic_mode`, `input_mode`, `amplify_x100`, `quad_scale` (2 bytes low/high), `save` (0 or 1). Total 10 bytes. Normal mouse packets still use sync `0xAA`; the Pico distinguishes the two.
+Config packet format (UART): sync `0x55` `0xCF`, command `0x01`, then 8 bytes: `num_mice`, `logic_mode`, `input_mode`, `output_mode`, `amplify_x100`, `quad_scale` (2 bytes low/high), `save` (0 or 1). Total 11 bytes. Normal mouse packets still use sync `0xAA`; the Pico distinguishes the two.
 
 ## Configuration reference
 
@@ -158,8 +158,9 @@ Settings are in **config.yaml** (then `configure.py` → **config.h**). Referenc
     | XNOR   | Same sign and both non-zero → (A+B)/2; opposite sign → 0; one zero → the other. |
 
   - **`input_mode`** – `uart`, `quadrature`, or `both`.
+  - **`output_mode`** – `combined` (one aggregated HID mouse) or `separate` (six independent HID mice; host sees 6 cursors). When `separate`, input 0→mouse 0, input 1→mouse 1, etc.
   - **`num_mice`** – 2–6. Quadrature and UART use the first N inputs.
-  - **`amplify`** – Scale factor (e.g. 1.5 = 50% more movement).
+  - **`amplify`** – Scale factor (e.g. 1.5 = 50% more movement); applies in `combined` mode only.
   - **`quad_scale`** – Quadrature counts per HID step (quadrature mode only).
 - Custom quadrature pins: edit **`QUAD_PINS`** in `main.c` if your wiring differs from the default (Mouse 0 = GP2–GP5 … Mouse 5 = GP22–GP25).
 - **`tusb_config.h`** – TinyUSB HID buffer size if you change report size.
@@ -177,7 +178,7 @@ One packet per “frame”:
 
 Total **15 bytes** per packet (sync + 12 + 1 + 1). The Pico sums the first N (dx, dy) from runtime settings, applies the current amplify factor, clamps to one HID report, and sends one combined mouse report (buttons and wheel from the single bytes).
 
-**Config packet** (separate from mouse data): sync `0x55` `0xCF`, cmd `0x01`, then 7 bytes (num_mice, logic_mode, input_mode, amplify_x100, quad_scale low/high, save). See **send_settings.py** and “Setting file on the Pico” above.
+**Config packet** (separate from mouse data): sync `0x55` `0xCF`, cmd `0x01`, then 8 bytes (num_mice, logic_mode, input_mode, output_mode, amplify_x100, quad_scale low/high, save). See **send_settings.py** and “Setting file on the Pico” above.
 
 ## Example: host script (Linux, 6 mice → UART)
 

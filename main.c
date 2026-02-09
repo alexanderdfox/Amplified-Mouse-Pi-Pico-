@@ -85,10 +85,10 @@ static bool g_has_report;
 static uint8_t uart_buf[UART_PACKET_LEN];
 static int uart_len;
 
-/* Config packet state: 0x55 0xCF 0x01 then 7 bytes (num_mice, logic, input, amplify_x100, quad_lo, quad_hi, save). */
+/* Config packet: 0x55 0xCF 0x01 then 8 bytes (num_mice, logic, input, output_mode, amplify_x100, quad_lo, quad_hi, save). */
 #define UART_CONFIG_HEADER_LEN  3
-#define UART_CONFIG_PAYLOAD_LEN 7
-static int uart_config_state;      /* 0=idle, 1=saw 0x55, 2=saw 0xCF, 3=reading payload */
+#define UART_CONFIG_PAYLOAD_LEN 8
+static int uart_config_state;
 static int uart_config_len;
 static uint8_t uart_config_buf[UART_CONFIG_PAYLOAD_LEN];
 
@@ -261,10 +261,11 @@ static void uart_process_byte(uint8_t b) {
         uart_config_buf[0],
         uart_config_buf[1],
         uart_config_buf[2],
-        uart_config_buf[3],
-        (uint16_t)uart_config_buf[4] | ((uint16_t)uart_config_buf[5] << 8)
+        uart_config_buf[3],  /* output_mode */
+        uart_config_buf[4],  /* amplify_x100 */
+        (uint16_t)uart_config_buf[5] | ((uint16_t)uart_config_buf[6] << 8)
       );
-      if (uart_config_buf[6] != 0)
+      if (uart_config_buf[7] != 0)
         settings_save_to_flash();
     }
     return;
@@ -288,12 +289,16 @@ static void uart_process_byte(uint8_t b) {
     if (uart_buf[0] != UART_SYNC) return;
 
     int n = get_num_mice();
+    uint8_t bt = uart_buf[1 + NUM_MICE_MAX * 2] & 0x07;
+    int8_t wh = (int8_t)uart_buf[1 + NUM_MICE_MAX * 2 + 1];
     for (int i = 0; i < n; i++) {
-      g_mice[i].dx  = (int8_t)uart_buf[1 + i * 2 + 0];
-      g_mice[i].dy  = (int8_t)uart_buf[1 + i * 2 + 1];
+      g_mice[i].dx      = (int8_t)uart_buf[1 + i * 2 + 0];
+      g_mice[i].dy      = (int8_t)uart_buf[1 + i * 2 + 1];
+      g_mice[i].buttons = bt;
+      g_mice[i].wheel   = wh;
     }
-    g_combined_buttons = uart_buf[1 + NUM_MICE_MAX * 2] & 0x07;
-    g_combined_wheel   = (int8_t)uart_buf[1 + NUM_MICE_MAX * 2 + 1];
+    g_combined_buttons = bt;
+    g_combined_wheel   = wh;
   }
 }
 
@@ -305,21 +310,42 @@ static void uart_poll(void) {
 }
 
 static void send_mouse_report(void) {
-  if (!tud_mounted() || !tud_hid_ready()) return;
+  const settings_t *s = settings_get();
+  uint8_t out_mode = s->output_mode;
+
+  if (out_mode == SETTINGS_OUTPUT_SEPARATE) {
+    /* Six separate mice: send each g_mice[i] to HID instance i. */
+    int n = get_num_mice();
+    for (int i = 0; i < n; i++) {
+      if (!tud_mounted() || !tud_hid_n_ready(i)) continue;
+      if (g_mice[i].dx == 0 && g_mice[i].dy == 0 && g_mice[i].wheel == 0 && g_mice[i].buttons == 0)
+        continue;
+      tud_hid_n_mouse_report(i, REPORT_ID_MOUSE,
+                            g_mice[i].buttons,
+                            g_mice[i].dx, g_mice[i].dy,
+                            g_mice[i].wheel, 0);
+      g_mice[i].dx = g_mice[i].dy = g_mice[i].wheel = 0;
+      g_mice[i].buttons = 0;
+    }
+    return;
+  }
+
+  /* Combined: single mouse on instance 0. */
+  if (!tud_mounted() || !tud_hid_n_ready(0)) return;
   if (!g_has_report && g_combined_dx == 0 && g_combined_dy == 0 &&
       g_combined_wheel == 0) return;
 
-  tud_hid_mouse_report(REPORT_ID_MOUSE,
-                       g_combined_buttons,
-                       (int8_t)g_combined_dx,
-                       (int8_t)g_combined_dy,
-                       (int8_t)g_combined_wheel,
-                       0);
+  tud_hid_n_mouse_report(0, REPORT_ID_MOUSE,
+                         g_combined_buttons,
+                         (int8_t)g_combined_dx,
+                         (int8_t)g_combined_dy,
+                         (int8_t)g_combined_wheel,
+                         0);
 
   g_combined_dx = g_combined_dy = 0;
   g_combined_wheel = 0;
   g_has_report = false;
-  memset(g_mice, 0, sizeof(g_mice)); /* consumed */
+  memset(g_mice, 0, sizeof(g_mice));
 }
 
 void tud_mount_cb(void) {}
@@ -369,11 +395,14 @@ int main(void) {
       uart_poll();
     if (input_mode == INPUT_MODE_QUADRATURE || input_mode == INPUT_MODE_BOTH)
       quadrature_poll();
-    aggregate_and_amplify();
+    if (settings_get()->output_mode == SETTINGS_OUTPUT_COMBINED)
+      aggregate_and_amplify();
 
-    if (g_has_report && (board_millis() - last_hid >= HID_POLL_MS)) {
-      send_mouse_report();
-      last_hid = board_millis();
+    if ((settings_get()->output_mode == SETTINGS_OUTPUT_SEPARATE) || g_has_report) {
+      if (board_millis() - last_hid >= HID_POLL_MS) {
+        send_mouse_report();
+        last_hid = board_millis();
+      }
     }
   }
 }

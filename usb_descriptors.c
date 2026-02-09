@@ -9,12 +9,22 @@
 #define USB_PID 0x000A
 
 enum {
-  ITF_NUM_HID,
+  ITF_NUM_HID0,
+  ITF_NUM_HID1,
+  ITF_NUM_HID2,
+  ITF_NUM_HID3,
+  ITF_NUM_HID4,
+  ITF_NUM_HID5,
   ITF_NUM_TOTAL
 };
 
-#define EPNUM_HID   0x81
-#define CONFIG_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
+#define EPNUM_HID0  0x81
+#define EPNUM_HID1  0x82
+#define EPNUM_HID2  0x83
+#define EPNUM_HID3  0x84
+#define EPNUM_HID4  0x85
+#define EPNUM_HID5  0x86
+#define CONFIG_LEN  (TUD_CONFIG_DESC_LEN + 6 * TUD_HID_DESC_LEN)
 
 uint8_t const desc_hid_report[] = {
   TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE))
@@ -27,7 +37,12 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance) {
 
 uint8_t const desc_configuration[] = {
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_LEN, 0x00, 100),
-  TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 5)
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID0, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID0, CFG_TUD_HID_EP_BUFSIZE, 5),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID1, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID1, CFG_TUD_HID_EP_BUFSIZE, 5),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID2, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID2, CFG_TUD_HID_EP_BUFSIZE, 5),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID3, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID3, CFG_TUD_HID_EP_BUFSIZE, 5),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID4, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID4, CFG_TUD_HID_EP_BUFSIZE, 5),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID5, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID5, CFG_TUD_HID_EP_BUFSIZE, 5)
 };
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {

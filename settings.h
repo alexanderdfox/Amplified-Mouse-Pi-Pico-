@@ -23,11 +23,14 @@
 #define SETTINGS_INPUT_UART         0
 #define SETTINGS_INPUT_QUADRATURE  1
 #define SETTINGS_INPUT_BOTH         2
+#define SETTINGS_OUTPUT_COMBINED   0   /* single combined mouse (instance 0) */
+#define SETTINGS_OUTPUT_SEPARATE   1   /* 6 separate mice (instances 0..5) */
 
 typedef struct {
   uint8_t num_mice;      /* 2..6 */
   uint8_t logic_mode;
   uint8_t input_mode;
+  uint8_t output_mode;   /* combined (0) or separate (1) */
   float amplify;
   uint16_t quad_scale;
 } settings_t;
@@ -45,9 +48,9 @@ void settings_set_input_mode(uint8_t m);
 void settings_set_amplify(float a);
 void settings_set_quad_scale(uint16_t q);
 
-/* Apply raw bytes from UART: num_mice, logic_mode, input_mode, amplify_x100, quad_scale (2 bytes). */
+/* Apply raw bytes from UART: num_mice, logic_mode, input_mode, output_mode, amplify_x100, quad_scale (2 bytes). */
 void settings_apply_uart(uint8_t num_mice, uint8_t logic_mode, uint8_t input_mode,
-                         uint8_t amplify_x100, uint16_t quad_scale);
+                         uint8_t output_mode, uint8_t amplify_x100, uint16_t quad_scale);
 
 /* Persist current settings to flash. Returns true on success. */
 bool settings_save_to_flash(void);

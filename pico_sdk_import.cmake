@@ -1,9 +1,9 @@
-# Set PICO_SDK_PATH to local pico-sdk if not set, then use SDK's import script
-get_filename_component(_pico_sdk_import_dir "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
+# Set PICO_SDK_PATH to local pico-sdk if not set, then use SDK's import script (project root = CMAKE_SOURCE_DIR)
+set(_pico_sdk_base "${CMAKE_SOURCE_DIR}")
 if(NOT PICO_SDK_PATH OR PICO_SDK_PATH STREQUAL "")
-  set(PICO_SDK_PATH "${_pico_sdk_import_dir}/pico-sdk" CACHE PATH "Pico SDK path" FORCE)
+  set(PICO_SDK_PATH "${_pico_sdk_base}/pico-sdk" CACHE PATH "Pico SDK path" FORCE)
 endif()
-get_filename_component(PICO_SDK_PATH "${PICO_SDK_PATH}" ABSOLUTE BASE_DIR "${_pico_sdk_import_dir}")
+get_filename_component(PICO_SDK_PATH "${PICO_SDK_PATH}" ABSOLUTE BASE_DIR "${_pico_sdk_base}")
 if(NOT EXISTS "${PICO_SDK_PATH}")
   message(FATAL_ERROR "Pico SDK not found at ${PICO_SDK_PATH}. Clone it: git clone https://github.com/raspberrypi/pico-sdk.git")
 endif()

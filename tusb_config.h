@@ -7,7 +7,7 @@ extern "C" {
 
 #define CFG_TUD_ENDPOINT0_SIZE  64
 #define CFG_TUD_ENABLED         1
-#define CFG_TUD_HID             1
+#define CFG_TUD_HID             6   /* 6 HID interfaces for 6 separate mice or 1 combined */
 #define CFG_TUD_HID_EP_BUFSIZE  8
 
 #ifndef BOARD_TUD_RHPORT

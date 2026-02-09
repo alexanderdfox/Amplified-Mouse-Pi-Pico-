@@ -5,6 +5,7 @@
 #define NUM_MICE        6
 #define LOGIC_MODE      0
 #define INPUT_MODE      0
+#define OUTPUT_MODE     0
 #define AMPLIFY         1.0f
 #define QUAD_SCALE      2
 

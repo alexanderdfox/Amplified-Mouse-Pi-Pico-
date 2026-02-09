@@ -9,7 +9,7 @@
 
 #define SETTINGS_MAGIC   "AMCF"
 #define SETTINGS_OFFSET  (PICO_FLASH_SIZE_BYTES - 4096)  /* last 4K sector */
-#define SETTINGS_PAYLOAD_LEN  8  /* num_mice, logic, input, amplify_x100, quad_scale(2), reserved(2) */
+#define SETTINGS_PAYLOAD_LEN  8  /* num_mice, logic, input, output_mode, amplify_x100, quad_scale(2), reserved(1) */
 
 static settings_t g_settings;
 
@@ -28,6 +28,7 @@ static void clamp_settings(void) {
   if (g_settings.num_mice > SETTINGS_NUM_MICE_MAX) g_settings.num_mice = SETTINGS_NUM_MICE_MAX;
   if (g_settings.logic_mode > SETTINGS_LOGIC_2_XNOR) g_settings.logic_mode = SETTINGS_LOGIC_SUM;
   if (g_settings.input_mode > SETTINGS_INPUT_BOTH) g_settings.input_mode = SETTINGS_INPUT_UART;
+  if (g_settings.output_mode > SETTINGS_OUTPUT_SEPARATE) g_settings.output_mode = SETTINGS_OUTPUT_COMBINED;
   if (g_settings.amplify < 0.1f) g_settings.amplify = 0.1f;
   if (g_settings.amplify > 10.0f) g_settings.amplify = 10.0f;
   if (g_settings.quad_scale < 1) g_settings.quad_scale = 1;
@@ -36,9 +37,10 @@ static void clamp_settings(void) {
 
 void settings_init(void) {
   /* Defaults from config.h */
-  g_settings.num_mice   = (uint8_t)NUM_MICE;
-  g_settings.logic_mode = (uint8_t)LOGIC_MODE;
+  g_settings.num_mice    = (uint8_t)NUM_MICE;
+  g_settings.logic_mode  = (uint8_t)LOGIC_MODE;
   g_settings.input_mode = (uint8_t)INPUT_MODE;
+  g_settings.output_mode = (uint8_t)OUTPUT_MODE;
   g_settings.amplify    = AMPLIFY;
   g_settings.quad_scale = (uint16_t)QUAD_SCALE;
   clamp_settings();
@@ -51,11 +53,12 @@ void settings_init(void) {
   memcpy(payload, flash + 4, SETTINGS_PAYLOAD_LEN);
   if (crc8(payload, SETTINGS_PAYLOAD_LEN) != flash[4 + SETTINGS_PAYLOAD_LEN])
     return;
-  g_settings.num_mice   = payload[0];
-  g_settings.logic_mode = payload[1];
-  g_settings.input_mode = payload[2];
-  g_settings.amplify    = (float)payload[3] / 100.0f;
-  g_settings.quad_scale = (uint16_t)payload[4] | ((uint16_t)payload[5] << 8);
+  g_settings.num_mice    = payload[0];
+  g_settings.logic_mode  = payload[1];
+  g_settings.input_mode  = payload[2];
+  g_settings.output_mode = payload[3] & 1;
+  g_settings.amplify     = (float)payload[4] / 100.0f;
+  g_settings.quad_scale  = (uint16_t)payload[5] | ((uint16_t)payload[6] << 8);
   clamp_settings();
 }
 
@@ -89,12 +92,13 @@ void settings_set_quad_scale(uint16_t q) {
 }
 
 void settings_apply_uart(uint8_t num_mice, uint8_t logic_mode, uint8_t input_mode,
-                         uint8_t amplify_x100, uint16_t quad_scale) {
-  g_settings.num_mice   = num_mice;
-  g_settings.logic_mode = logic_mode;
-  g_settings.input_mode = input_mode;
-  g_settings.amplify    = (float)amplify_x100 / 100.0f;
-  g_settings.quad_scale = quad_scale;
+                         uint8_t output_mode, uint8_t amplify_x100, uint16_t quad_scale) {
+  g_settings.num_mice    = num_mice;
+  g_settings.logic_mode  = logic_mode;
+  g_settings.input_mode  = input_mode;
+  g_settings.output_mode = output_mode & 1;
+  g_settings.amplify     = (float)amplify_x100 / 100.0f;
+  g_settings.quad_scale  = quad_scale;
   clamp_settings();
 }
 
@@ -104,10 +108,10 @@ bool settings_save_to_flash(void) {
   buf[4] = g_settings.num_mice;
   buf[5] = g_settings.logic_mode;
   buf[6] = g_settings.input_mode;
-  buf[7] = (uint8_t)((int)(g_settings.amplify * 100.0f) % 256);
-  buf[8] = (uint8_t)(g_settings.quad_scale & 0xFF);
-  buf[9] = (uint8_t)(g_settings.quad_scale >> 8);
-  buf[10] = 0;
+  buf[7] = g_settings.output_mode;
+  buf[8] = (uint8_t)((int)(g_settings.amplify * 100.0f) % 256);
+  buf[9] = (uint8_t)(g_settings.quad_scale & 0xFF);
+  buf[10] = (uint8_t)(g_settings.quad_scale >> 8);
   buf[11] = 0;
   buf[12] = crc8(buf + 4, SETTINGS_PAYLOAD_LEN);
 
