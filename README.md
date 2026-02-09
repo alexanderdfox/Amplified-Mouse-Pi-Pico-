@@ -2,21 +2,34 @@
 
 Aggregates **6 mouse inputs** into a single USB HID mouse with optional **amplification** (scale factor on combined movement), or presents them as **6 separate HID mice** (one cursor per input). The Pico appears as either one or six mice to the PC; you can feed it from 6 physical mice via a host (UART or USB host hardware).
 
+## Project structure
+
+```
+mouse/
+├── src/              # Firmware source (main.c, settings.c, usb_descriptors.c)
+├── include/          # Headers (settings.h, usb_descriptors.h, tusb_config.h)
+├── config/           # config.yaml (user settings) + config.h (generated)
+├── scripts/          # Python: configure.py, send_settings.py, host_send_mice.py, test_random_mice.py
+├── firmware/         # Output: amplified_mouse.uf2
+├── build.sh          # Build script (runs configure, then cmake/make)
+└── CMakeLists.txt
+```
+
 ## Use cases
 
 **Accessibility / limited mobility**  
-Use several small movements (e.g. from different fingers, or light taps on multiple trackballs) that add up to normal cursor motion. Set `AMPLIFY` > 1 so small combined motion still moves the cursor enough.
+Use several small movements (e.g. from different fingers, or light taps on multiple trackballs) that add up to normal cursor motion. Set `amplify` > 1 in `config/config.yaml` so small combined motion still moves the cursor enough.
 
 **Collaborative control**  
 Several people each have a mouse; all movements sum to one cursor (e.g. teaching, pair demos, or a shared kiosk). Buttons/wheel can be OR’d so any participant can click or scroll.
 
 **Precision or “super” control**  
-Run 2–6 low-DPI or low-sensitivity devices in parallel; the sum gives finer resolution or a higher effective sensitivity. Tune `AMPLIFY` in `main.c` to get the feel you want.
+Run 2–6 low-DPI or low-sensitivity devices in parallel; the sum gives finer resolution or a higher effective sensitivity. Tune `amplify` in `config/config.yaml` to get the feel you want.
 
 **Quick test (Option A)**  
 1. Plug the Pico into the PC via USB (it shows up as one mouse).  
 2. On the same PC, plug in a USB–UART adapter and connect its TX/RX/GND to the Pico’s UART (see wiring below).  
-3. Plug up to 6 mice into the PC and run `host_send_mice.py /dev/ttyUSB0` (or your serial port). The “amplified” cursor is the one from the Pico; move any of the 6 mice to move it.
+3. Plug up to 6 mice into the PC and run `python3 scripts/host_send_mice.py /dev/ttyUSB0` (or your serial port). The “amplified” cursor is the one from the Pico; move any of the 6 mice to move it.
 
 ## Hardware options
 
@@ -54,30 +67,28 @@ Each ball mouse has two axes (X, Y); each axis uses a quadrature encoder (two pi
   - **Channel A (X)** → X_A GPIO, **Channel B (X)** → X_B GPIO; same for Y.  
 - Use **3.3 V only**; do not connect 5 V to GPIO.  
 - The firmware enables internal pull-ups on the quadrature pins; if your encoders are open-collector, that’s enough. If they drive 3.3 V, pull-ups are optional.  
-- **Build:** Set `input_mode: quadrature` in `config.yaml`, run `python3 configure.py`, then build. UART is unused in this mode. Tune `quad_scale` in config if the cursor is too fast or too slow.
+- **Build:** Set `input_mode: quadrature` in `config/config.yaml`, run `python3 scripts/configure.py`, then build. UART is unused in this mode. Tune `quad_scale` in config if the cursor is too fast or too slow.
 
 **C2 – Optical flow sensors (e.g. ADNS-2610, PMW3360) over SPI**  
 One shared SPI bus plus one chip-select (CS) per sensor: e.g. SPI0 on default pins, CS on GP2–GP7 for 6 sensors. Firmware would read motion registers and fill `g_mice[]`; this variant can be added as a separate build option if you use such sensors.
 
 ## Full workflow
 
-1. **Configure** – Edit `config.yaml` (num_mice, logic_mode, input_mode, amplify, quad_scale) or use CLI, then run `python3 configure.py`.
-2. **Build** – `mkdir -p build && cd build && cmake .. && make` (set `PICO_SDK_PATH` if the SDK is not in the repo).
-3. **Flash** – Copy `build/amplified_mouse.uf2` onto the Pico (hold BOOTSEL, plug USB, then drag the file).
-4. **UART option** – For Option A, run `python3 host_send_mice.py /dev/ttyUSB0` (or your port). The host sends 15-byte packets; the firmware uses the first N mice from **runtime settings** (from flash or config.h defaults).
-5. **Optional: push settings to Pico** – Run `python3 send_settings.py --port /dev/ttyACM0` to write the current config to the Pico (and optionally save to flash). No reflash needed.
+1. **Configure** – Edit `config/config.yaml` (num_mice, logic_mode, input_mode, output_mode, amplify, quad_scale) or use CLI, then run `python3 scripts/configure.py`.
+2. **Build** – Run `./build.sh` (or `mkdir -p build && cd build && cmake .. && make`). Output: `firmware/amplified_mouse.uf2`.
+3. **Flash** – Copy `firmware/amplified_mouse.uf2` onto the Pico (hold BOOTSEL, plug USB, then drag the file).
+4. **Mouse data** – Option A (UART): run `python3 scripts/host_send_mice.py /dev/ttyUSB0` (Linux) or `python3 scripts/test_random_mice.py --port /dev/cu.usbmodem101` (macOS, over Pico USB). Option C (quadrature): wire encoders to GPIO.
+5. **Config at runtime** – Run `python3 scripts/send_settings.py --port /dev/ttyACM0` (Linux) or `--port /dev/cu.usbmodem101` (macOS) to push settings. No reflash needed.
 
 ## Build (Pico SDK)
 
 If the repo has a local `pico-sdk` clone, you don’t need to set `PICO_SDK_PATH`. After changing settings, run **`python3 configure.py`** so `config.h` is up to date. Then:
 
 ```bash
-mkdir -p build && cd build
-cmake ..
-make
+./build.sh
 ```
 
-Flash: copy `amplified_mouse.uf2` to the Pico (bootsel mode).
+This builds and copies `amplified_mouse.uf2` to `firmware/`. Flash by copying to the Pico (BOOTSEL mode).
 
 ### macOS: fix “cannot read spec file 'nosys.specs'”
 
@@ -102,46 +113,46 @@ If the cask uses a versioned folder (e.g. `13.3.rel1`), use that in `PATH` inste
 
 ## Configuring firmware (configure.py)
 
-Instead of editing `main.c`, you can change settings via **config.yaml** and regenerate **config.h**:
+Instead of editing `main.c`, you can change settings via **config/config.yaml** and regenerate **config/config.h**:
 
 ```bash
-# Edit config.yaml (num_mice, logic_mode, input_mode, amplify, quad_scale), then:
-python3 configure.py
+# Edit config/config.yaml (num_mice, logic_mode, input_mode, output_mode, amplify, quad_scale), then:
+python3 scripts/configure.py
 
 # Or override from the command line:
-python3 configure.py --num-mice 2 --logic-mode or --input-mode quadrature
-python3 configure.py --list   # show logic/input options
+python3 scripts/configure.py --num-mice 2 --logic-mode or --input-mode quadrature --output-mode separate
+python3 scripts/configure.py --list   # show all options
 ```
 
-Then build as usual (`cd build && make`). **config.h** is generated from **config.yaml** (or CLI) and is included by `main.c`.
+Then run `./build.sh` (or `cd build && make`). **config/config.h** is generated from **config/config.yaml** (or CLI) and is included by the firmware.
 
-- **config.yaml** – `num_mice` (2–6), `logic_mode` (sum, average, max, min, and, or, xor, nand, nor, xnor), `input_mode` (uart, quadrature, both), `amplify`, `quad_scale`.
+- **config/config.yaml** – `num_mice` (2–6), `logic_mode` (sum, average, max, min, and, or, xor, nand, nor, xnor), `input_mode` (uart, quadrature, both), `output_mode` (combined, separate), `amplify`, `quad_scale`.
 
 ### Setting file on the Pico (runtime + flash)
 
-The firmware keeps a **runtime settings** block in the Pico’s flash (last 4 KB). At boot it loads defaults from **config.h**, then overwrites with saved settings from flash if present. You can change settings **without reflashing** by sending a config packet over UART:
+The firmware keeps a **runtime settings** block in the Pico’s flash (last 4 KB). At boot it loads defaults from **config.h**, then overwrites with saved settings from flash if present. You can change settings **without reflashing** by sending a config packet over UART or the Pico's USB serial (CDC):
 
 1. **Apply only in RAM** (lost on reboot): send the config packet with “save” = 0.
 2. **Apply and save to flash**: send with “save” = 1; the new values persist across reboots.
 
-Use **send_settings.py** to push current config (from `config.yaml` or CLI) to the Pico:
+Use **scripts/send_settings.py** to push current config (from `config/config.yaml` or CLI) to the Pico:
 
 ```bash
 # Save to flash (persist across reboot)
-python3 send_settings.py --port /dev/ttyACM0
+python3 scripts/send_settings.py --port /dev/ttyACM0
 
 # Apply in RAM only
-python3 send_settings.py --port /dev/tty.usbmodem101 --no-save
+python3 scripts/send_settings.py --port /dev/cu.usbmodem101 --no-save
 
 # Override and save
-python3 send_settings.py --port /dev/ttyACM0 --num-mice 4 --logic-mode or
+python3 scripts/send_settings.py --port /dev/ttyACM0 --num-mice 4 --logic-mode or
 ```
 
 Config packet format (UART): sync `0x55` `0xCF`, command `0x01`, then 8 bytes: `num_mice`, `logic_mode`, `input_mode`, `output_mode`, `amplify_x100`, `quad_scale` (2 bytes low/high), `save` (0 or 1). Total 11 bytes. Normal mouse packets still use sync `0xAA`; the Pico distinguishes the two.
 
 ## Configuration reference
 
-Settings are in **config.yaml** (then `configure.py` → **config.h**). Reference:
+Settings are in **config/config.yaml** (then `scripts/configure.py` → **config/config.h**). Reference:
   - **`logic_mode`** – How inputs are combined:
     - **All inputs:** `LOGIC_MODE_SUM` (default), `LOGIC_MODE_AVERAGE`, `LOGIC_MODE_MAX`.
     - **2-ball only** (uses only mouse 0 and mouse 1): `LOGIC_MODE_2_MIN`, `LOGIC_MODE_2_AND`, `LOGIC_MODE_2_OR`, `LOGIC_MODE_2_XOR`, `LOGIC_MODE_2_NAND`, `LOGIC_MODE_2_NOR`, `LOGIC_MODE_2_XNOR`. See table below.
@@ -162,8 +173,8 @@ Settings are in **config.yaml** (then `configure.py` → **config.h**). Referenc
   - **`num_mice`** – 2–6. Quadrature and UART use the first N inputs.
   - **`amplify`** – Scale factor (e.g. 1.5 = 50% more movement); applies in `combined` mode only.
   - **`quad_scale`** – Quadrature counts per HID step (quadrature mode only).
-- Custom quadrature pins: edit **`QUAD_PINS`** in `main.c` if your wiring differs from the default (Mouse 0 = GP2–GP5 … Mouse 5 = GP22–GP25).
-- **`tusb_config.h`** – TinyUSB HID buffer size if you change report size.
+- Custom quadrature pins: edit **`QUAD_PINS`** in `src/main.c` if your wiring differs from the default (Mouse 0 = GP2–GP5 … Mouse 5 = GP22–GP25).
+- **`include/tusb_config.h`** – TinyUSB HID buffer size if you change report size.
 
 ## UART protocol (Option A)
 
@@ -176,23 +187,38 @@ One packet per “frame”:
 | 13        | Buttons (bit 0 = left, 1 = right, 2 = middle) |
 | 14        | Wheel (signed 8‑bit) |
 
-Total **15 bytes** per packet (sync + 12 + 1 + 1). The Pico sums the first N (dx, dy) from runtime settings, applies the current amplify factor, clamps to one HID report, and sends one combined mouse report (buttons and wheel from the single bytes).
+Total **15 bytes** per packet (sync + 12 + 1 + 1). Depending on **output_mode**: **combined** – sums the first N (dx, dy), applies amplify, sends one HID report; **separate** – sends each of the first N mice to its own HID interface (6 independent mice).
 
-**Config packet** (separate from mouse data): sync `0x55` `0xCF`, cmd `0x01`, then 8 bytes (num_mice, logic_mode, input_mode, output_mode, amplify_x100, quad_scale low/high, save). See **send_settings.py** and “Setting file on the Pico” above.
+**Config packet** (separate from mouse data): sync `0x55` `0xCF`, cmd `0x01`, then 8 bytes (num_mice, logic_mode, input_mode, output_mode, amplify_x100, quad_scale low/high, save). See **scripts/send_settings.py** and “Setting file on the Pico” above.
 
 ## Example: host script (Linux, 6 mice → UART)
 
-A Python script that reads 6 mice from `/dev/input/event*` and sends the above packet over serial is in `host_send_mice.py`. Requires `pyserial` and access to input devices (e.g. add user to `input` group).
+A Python script that reads 6 mice from `/dev/input/event*` and sends the above packet over serial is in `scripts/host_send_mice.py`. Requires `pyserial` and access to input devices (e.g. add user to `input` group).
 
 ```bash
 pip install pyserial
-python3 host_send_mice.py /dev/ttyUSB0
+python3 scripts/host_send_mice.py /dev/ttyUSB0
 ```
 
 (Use the correct serial port for your UART adapter.)
 
+### Test: random movements (no real mice)
+
+**scripts/test_random_mice.py** sends random (dx, dy) for each of the 6 mouse slots over UART or USB CDC. Use it to verify combined or 6-separate behaviour without plugging in mice. Works on Linux, macOS, and Windows (pyserial only).
+
+```bash
+# Linux: UART adapter (host TX → Pico GP1)
+python3 scripts/test_random_mice.py /dev/ttyUSB0
+# macOS: Pico USB serial (no UART adapter)
+python3 scripts/test_random_mice.py --port /dev/cu.usbmodem101
+
+# Options: --single 0 (only mouse 0), --duration 10, --rate 50
+```
+
+Use UART port (Linux) or Pico USB serial (macOS: `/dev/cu.usbmodem101`).
+
 ## Summary
 
-- **6 inputs** → summed (dx, dy) + one buttons byte + one wheel byte.
-- **Amplification** = multiply combined movement by `AMPLIFY` in `main.c`.
-- **Output** = single USB HID mouse (TinyUSB device on Pico).
+- **6 inputs** → combined (sum, average, max, or 2-ball logic) or **6 separate HID mice**.
+- **Amplification** – scale factor in `config/config.yaml` / `amplify` (combined mode only).
+- **Output** – 1 or 6 USB HID mice + USB CDC serial for config (TinyUSB on Pico).

@@ -1,9 +1,9 @@
-# Amplified mouse firmware settings. Run: python3 configure.py
-# Then build: cd build && cmake .. && make
+# Amplified mouse firmware settings. Run: python3 scripts/configure.py
+# Then build: ./build.sh
 
 num_mice: 6          # 2..6
 logic_mode: sum      # sum | average | max | min | and | or | xor | nand | nor | xnor
-input_mode: uart     # uart | quadrature | both
-output_mode: combined  # combined (1 mouse) | separate (6 mice)
+input_mode: both     # uart | quadrature | both
+output_mode: separate  # combined (1 mouse) | separate (6 mice)
 amplify: 1.0         # scale factor (float)
 quad_scale: 2        # quadrature counts per HID step (quadrature mode only)

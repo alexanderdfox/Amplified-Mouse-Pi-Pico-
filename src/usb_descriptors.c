@@ -1,5 +1,5 @@
 /*
- * USB descriptors for HID mouse only (6-input amplified mouse).
+ * USB descriptors: 1 CDC (serial) + 6 HID mouse (so Pico shows in /dev as serial).
  */
 #include <string.h>
 #include "tusb.h"
@@ -9,6 +9,8 @@
 #define USB_PID 0x000A
 
 enum {
+  ITF_NUM_CDC_COMM,
+  ITF_NUM_CDC_DATA,
   ITF_NUM_HID0,
   ITF_NUM_HID1,
   ITF_NUM_HID2,
@@ -18,13 +20,16 @@ enum {
   ITF_NUM_TOTAL
 };
 
-#define EPNUM_HID0  0x81
-#define EPNUM_HID1  0x82
-#define EPNUM_HID2  0x83
-#define EPNUM_HID3  0x84
-#define EPNUM_HID4  0x85
-#define EPNUM_HID5  0x86
-#define CONFIG_LEN  (TUD_CONFIG_DESC_LEN + 6 * TUD_HID_DESC_LEN)
+#define EPNUM_CDC_NOTIF  0x87
+#define EPNUM_CDC_OUT    0x08
+#define EPNUM_CDC_IN     0x88
+#define EPNUM_HID0       0x81
+#define EPNUM_HID1       0x82
+#define EPNUM_HID2       0x83
+#define EPNUM_HID3       0x84
+#define EPNUM_HID4       0x85
+#define EPNUM_HID5       0x86
+#define CONFIG_LEN       (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + 6 * TUD_HID_DESC_LEN)
 
 uint8_t const desc_hid_report[] = {
   TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE))
@@ -37,6 +42,7 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance) {
 
 uint8_t const desc_configuration[] = {
   TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_LEN, 0x00, 100),
+  TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_COMM, 0, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
   TUD_HID_DESCRIPTOR(ITF_NUM_HID0, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID0, CFG_TUD_HID_EP_BUFSIZE, 5),
   TUD_HID_DESCRIPTOR(ITF_NUM_HID1, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID1, CFG_TUD_HID_EP_BUFSIZE, 5),
   TUD_HID_DESCRIPTOR(ITF_NUM_HID2, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID2, CFG_TUD_HID_EP_BUFSIZE, 5),

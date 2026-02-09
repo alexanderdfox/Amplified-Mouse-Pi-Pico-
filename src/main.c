@@ -242,8 +242,8 @@ static void aggregate_and_amplify(void) {
 #define UART_CONFIG_SYNC2  0xCF
 #define UART_CONFIG_CMD    0x01
 
-static void uart_process_byte(uint8_t b) {
-  /* Config packet: 0x55 0xCF 0x01 N L I A Q_lo Q_hi [save]. */
+/* Process one byte of config packet (0x55 0xCF 0x01 + 8 bytes). Call from UART or USB CDC. */
+static void config_process_byte(uint8_t b) {
   if (uart_config_state == 1) {
     uart_config_state = (b == UART_CONFIG_SYNC2) ? 2 : 0;
     return;
@@ -261,8 +261,8 @@ static void uart_process_byte(uint8_t b) {
         uart_config_buf[0],
         uart_config_buf[1],
         uart_config_buf[2],
-        uart_config_buf[3],  /* output_mode */
-        uart_config_buf[4],  /* amplify_x100 */
+        uart_config_buf[3],
+        uart_config_buf[4],
         (uint16_t)uart_config_buf[5] | ((uint16_t)uart_config_buf[6] << 8)
       );
       if (uart_config_buf[7] != 0)
@@ -270,12 +270,18 @@ static void uart_process_byte(uint8_t b) {
     }
     return;
   }
+  if (b == UART_CONFIG_SYNC1) {
+    uart_config_state = 1;
+    return;
+  }
+}
 
+static void uart_process_byte(uint8_t b) {
+  config_process_byte(b);
+  if (uart_config_state != 0)
+    return;
+  /* Mouse packet on UART */
   if (uart_len == 0) {
-    if (b == UART_CONFIG_SYNC1) {
-      uart_config_state = 1;
-      return;
-    }
     if (b == UART_SYNC) {
       uart_buf[0] = b;
       uart_len = 1;
@@ -390,6 +396,12 @@ int main(void) {
   uint32_t last_hid = 0;
   while (1) {
     tud_task();
+    /* USB CDC (serial): accept config and mouse packets so send_settings.py and test_random_mice.py work over the Pico's USB port (macOS: no UART adapter needed) */
+    while (tud_cdc_available()) {
+      uint8_t c;
+      if (tud_cdc_read(&c, 1) == 1)
+        uart_process_byte(c);
+    }
     input_mode = settings_get()->input_mode;
     if (input_mode == INPUT_MODE_UART || input_mode == INPUT_MODE_BOTH)
       uart_poll();

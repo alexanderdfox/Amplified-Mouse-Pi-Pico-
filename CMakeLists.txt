@@ -6,13 +6,14 @@ project(amplified_mouse)
 pico_sdk_init()
 
 add_executable(amplified_mouse
-  main.c
-  settings.c
-  usb_descriptors.c
+  src/main.c
+  src/settings.c
+  src/usb_descriptors.c
 )
 
 target_include_directories(amplified_mouse PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}
+  ${CMAKE_CURRENT_LIST_DIR}/include
+  ${CMAKE_CURRENT_LIST_DIR}/config
 )
 
 target_link_libraries(amplified_mouse PRIVATE

@@ -6,13 +6,14 @@ This document describes **possible use cases**, **hardware setups**, and **confi
 
 ## What this device does
 
-The firmware turns **multiple mouse-like inputs** (2–6) into **one USB HID mouse**. The Pico appears as a single mouse to the computer. You choose:
+The firmware turns **multiple mouse-like inputs** (2–6) into **one or six USB HID mice**. The Pico appears as either a single combined mouse or six separate mice to the computer. You choose:
 
 - **Where input comes from:** UART (host PC/RPi sending motion), quadrature encoders (e.g. ball mice wired to GPIO), or both.
 - **How inputs are combined:** sum, average, max, or one of several 2-input logic modes (min, and, or, xor, etc.).
-- **How strong the output is:** an amplification factor (e.g. 1.5×) so small combined motion still moves the cursor enough, or to tune feel.
+- **Output mode:** one combined USB mouse (all inputs merged) or six separate USB HID mice (one cursor per input).
+- **How strong the output is:** an amplification factor (e.g. 1.5×) so small combined motion still moves the cursor enough, or to tune feel (combined mode only).
 
-Settings can be baked in at build time (**config.yaml** → **config.h** → reflash) or pushed at runtime over UART and optionally saved in the Pico’s flash (**send_settings.py**), so you can change behavior without reflashing.
+Settings can be baked in at build time (**config/config.yaml** → **config/config.h** → reflash) or pushed at runtime over UART or USB CDC and optionally saved in the Pico’s flash (**scripts/send_settings.py**), so you can change behavior without reflashing.
 
 ---
 
@@ -23,15 +24,15 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 ### Scenario A: Multiple fingers or limbs
 
 - **Idea:** Several small trackballs or touchpads (or one device with multiple “zones”) each send motion. Combined movement reaches the target; amplification makes small total motion sufficient.
-- **Hardware:** Option A (UART): host PC has several USB mice or evdev sources; `host_send_mice.py` aggregates them and sends to the Pico. Or Option C (quadrature): several ball encoders wired to the Pico.
+- **Hardware:** Option A (UART): host PC has several USB mice or evdev sources; `scripts/host_send_mice.py` aggregates them and sends to the Pico. Or Option C (quadrature): several ball encoders wired to the Pico.
 - **Settings:**
   - **logic_mode:** `sum` (all contributions add).
   - **num_mice:** 2–6 depending on how many input devices you have.
   - **amplify:** Start at 1.5–2.0; increase if the cursor still feels sluggish for small movements.
 - **Workflow:**
   1. Build and flash with `num_mice` and `input_mode` matching your setup.
-  2. Run `host_send_mice.py` (UART) or use quadrature wiring.
-  3. Tune `amplify` via `config.yaml` + `configure.py` + reflash, or push at runtime with `send_settings.py --port /dev/ttyACM0` and optionally save to flash.
+  2. Run `scripts/host_send_mice.py` (UART) or use quadrature wiring.
+  3. Tune `amplify` via `config/config.yaml` + `scripts/configure.py` + reflash, or push at runtime with `scripts/send_settings.py --port /dev/ttyACM0` and optionally save to flash.
 
 ### Scenario B: One strong and one weak input
 
@@ -47,7 +48,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 ### Tips
 
-- Use **runtime settings** (`send_settings.py` and save to flash) to adjust amplification or logic without reflashing when testing with the user.
+- Use **runtime settings** (`scripts/send_settings.py` and save to flash) to adjust amplification or logic without reflashing when testing with the user.
 - For quadrature ball mice, increase **quad_scale** if the cursor is too fast (more encoder ticks per HID step).
 
 ---
@@ -64,7 +65,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
   - **logic_mode:** `sum`.
   - **num_mice:** Number of participants (2–6).
   - **amplify:** Often 1.0; if the summed motion is too strong, use `average` so the cursor speed stays moderate.
-- **Workflow:** Flash once; optionally use `send_settings.py` to switch between 2/4/6 mice or sum vs average without reflashing.
+- **Workflow:** Flash once; optionally use `scripts/send_settings.py` to switch between 2/4/6 mice or sum vs average without reflashing.
 
 ### Scenario B: “Average” so no one dominates
 
@@ -83,7 +84,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 ### Tips
 
-- For a **kiosk**, set **num_mice** and **logic_mode** once (e.g. sum or average), save to flash with `send_settings.py`, so the unit keeps the same behavior after power cycle.
+- For a **kiosk**, set **num_mice** and **logic_mode** once (e.g. sum or average), save to flash with `scripts/send_settings.py`, so the unit keeps the same behavior after power cycle.
 - Use **input_mode: uart** when the host PC is doing the aggregation; use **quadrature** or **both** only if you have physical encoders on the Pico.
 
 ---
@@ -100,7 +101,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
   - **logic_mode:** `sum`.
   - **num_mice:** 2–6.
   - **amplify:** Tune to taste (e.g. 1.0–2.0) so cursor speed feels right.
-- **Workflow:** Build/flash; run `host_send_mice.py`. Use `send_settings.py` to tweak `amplify` at runtime and save to flash when satisfied.
+- **Workflow:** Build/flash; run `scripts/host_send_mice.py`. Use `scripts/send_settings.py` to tweak `amplify` at runtime and save to flash when satisfied.
 
 ### Scenario B: Two inputs, “smaller movement wins” (MIN)
 
@@ -132,9 +133,9 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
   - **quad_scale:** Start at 2; increase if cursor is too fast, decrease if too slow.
   - **logic_mode:** `sum` (or any other mode as needed).
 - **Workflow:**
-  1. Edit `config.yaml`: `input_mode: quadrature`, set `num_mice`, `quad_scale`, `logic_mode`, `amplify`.
-  2. Run `configure.py`, build, flash.
-  3. Optionally push changes later with `send_settings.py` (UART must be connected for config packets; you can use `input_mode: both` and leave host UART idle if you only use quadrature for motion).
+  1. Edit `config/config.yaml`: `input_mode: quadrature`, set `num_mice`, `quad_scale`, `logic_mode`, `amplify`.
+  2. Run `scripts/configure.py`, build, flash.
+  3. Optionally push changes later with `scripts/send_settings.py` (UART or USB CDC must be connected for config packets; you can use `input_mode: both` and leave host UART idle if you only use quadrature for motion).
 
 ### Scenario B: Mixed UART + quadrature
 
@@ -154,25 +155,25 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 ### Scenario A: Quick UART test with 6 mice
 
-- **Idea:** Pico as USB mouse + UART connected to host. Host runs `host_send_mice.py`; you move 6 USB mice and see the combined cursor. Change behavior by pushing new settings over UART.
+- **Idea:** Pico as USB mouse + UART connected to host. Host runs `scripts/host_send_mice.py`; you move 6 USB mice and see the combined cursor. Change behavior by pushing new settings over UART.
 - **Workflow:**
   1. Flash a build that includes UART (`input_mode: uart` or `both`).
-  2. Run `host_send_mice.py /dev/ttyUSB0` (or your UART port).
-  3. Change `config.yaml` (or use CLI) and run `send_settings.py --port /dev/ttyACM0` to apply and optionally save. No reflash.
+  2. Run `scripts/host_send_mice.py /dev/ttyUSB0` (or your UART port).
+  3. Change `config/config.yaml` (or use CLI) and run `scripts/send_settings.py --port /dev/ttyACM0` to apply and optionally save. No reflash.
 
 ### Scenario B: Try logic modes without reflash
 
 - **Idea:** Cycle through sum, average, max, or 2-ball modes (or, xor, min, etc.) by sending config packets.
-- **Workflow:** Use `send_settings.py` with different `--logic-mode` and `--num-mice` (e.g. 2 for 2-ball modes). Use `--no-save` to test in RAM; omit it to save to flash when happy.
+- **Workflow:** Use `scripts/send_settings.py` with different `--logic-mode` and `--num-mice` (e.g. 2 for 2-ball modes). Use `--no-save` to test in RAM; omit it to save to flash when happy.
 
 ### Scenario C: Tune amplification live
 
 - **Idea:** Adjust `amplify` until cursor speed feels right, then save to flash.
-- **Workflow:** `send_settings.py --port /dev/ttyACM0 --amplify 1.5` (then 1.2, 2.0, etc.). When satisfied, run again without `--no-save` so it persists.
+- **Workflow:** `scripts/send_settings.py --port /dev/ttyACM0 --amplify 1.5` (then 1.2, 2.0, etc.). When satisfied, run again without `--no-save` so it persists.
 
 ### Tips
 
-- **send_settings.py** reads **config.yaml** by default; use CLI flags to override. The Pico’s serial port (USB CDC) is often `/dev/ttyACM0` (Linux) or `/dev/tty.usbmodem*` (macOS); the UART adapter is a different port (e.g. `/dev/ttyUSB0`).
+- **scripts/send_settings.py** reads **config/config.yaml** by default; use CLI flags to override. Use the Pico's USB CDC serial port: `/dev/ttyACM0` or `/dev/cu.usbmodem101` (Linux/macOS); or the UART adapter (e.g. `/dev/ttyUSB0`) if connected.
 
 ---
 
@@ -185,7 +186,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 - **Idea:** Pico is built into a kiosk with N mice (UART host or quadrature). You set num_mice, logic_mode, amplify, and input_mode once; they must survive reboot.
 - **Workflow:**
   1. Build and flash with sensible defaults in config.h.
-  2. Connect UART (if using UART input or for config). Run `send_settings.py --port /dev/ttyACM0` with the desired options (no `--no-save`). Settings are written to flash.
+  2. Connect UART (if using UART input or for config). Run `scripts/send_settings.py --port /dev/ttyACM0` with the desired options (no `--no-save`). Settings are written to flash.
   3. On every boot, the Pico loads from flash and uses those settings. No need to run send_settings again unless you want to change behavior.
 
 ### Tips
@@ -200,7 +201,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 ### Scenarios
 
-- **Sum vs average vs max:** Flash with 2 mice (UART), try `sum`, `average`, `max` via `send_settings.py` and observe how cursor response changes.
+- **Sum vs average vs max:** Flash with 2 mice (UART), try `sum`, `average`, `max` via `scripts/send_settings.py` and observe how cursor response changes.
 - **2-ball logic:** Set **num_mice: 2**, try `or`, `xor`, `and`, `min`, `nand`, `nor`, `xnor` and document the resulting behavior (e.g. “XOR gives cancellation when both move”).
 - **Quadrature:** Wire one or two ball encoders to the Pico, set **input_mode: quadrature**, **num_mice: 2**, and **quad_scale**; see how scale affects cursor speed.
 - **Runtime vs compile-time:** Change config in config.yaml, run configure.py, but don’t reflash; instead use send_settings to push the same values. Then change again and reflash to see that flash-stored settings override config.h at boot.
@@ -228,7 +229,7 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 | input_mode | Use when |
 |------------|----------|
-| `uart` | Host (PC/RPi) sends motion over UART (e.g. host_send_mice.py). |
+| `uart` | Host (PC/RPi) sends motion over UART (e.g. scripts/host_send_mice.py). |
 | `quadrature` | 2–6 quadrature encoders wired to Pico GPIO; no UART motion. |
 | `both` | You have both UART and quadrature connected; both feed the same combined mouse. |
 
@@ -236,8 +237,8 @@ Settings can be baked in at build time (**config.yaml** → **config.h** → ref
 
 ## Compile-time vs runtime settings
 
-- **Compile-time:** Edit **config.yaml**, run **configure.py**, then **build and reflash**. Defines defaults and is required for a valid build (e.g. NUM_MICE 2–6).
-- **Runtime:** Send a config packet over UART (e.g. via **send_settings.py**). Applied immediately. With **save** = 1, settings are stored in the Pico’s flash and loaded on every boot, so they override the compile-time defaults until you overwrite them again or reflash.
+- **Compile-time:** Edit **config/config.yaml**, run **scripts/configure.py**, then **build and reflash**. Defines defaults and is required for a valid build (e.g. NUM_MICE 2–6).
+- **Runtime:** Send a config packet over UART or USB CDC (e.g. via **scripts/send_settings.py**). Applied immediately. With **save** = 1, settings are stored in the Pico’s flash and loaded on every boot, so they override the compile-time defaults until you overwrite them again or reflash.
 
 Use **runtime + save** when you want to change behavior without reflashing (e.g. accessibility tuning, kiosk setup, or trying different modes during development).
 
@@ -245,13 +246,14 @@ Use **runtime + save** when you want to change behavior without reflashing (e.g.
 
 ## Summary by scenario
 
-| Scenario | Typical input_mode | Typical logic_mode | Notes |
-|----------|--------------------|--------------------|-------|
-| Accessibility (multiple small inputs) | uart or quadrature | sum | Increase amplify. |
-| Collaborative (shared cursor) | uart | sum or average | num_mice = number of users. |
-| Precision (combined DPI) | uart | sum | Tune amplify. |
-| Salvaged ball mice | quadrature | sum | Set quad_scale. |
-| Testing / try modes | uart or both | any | Use send_settings.py, --no-save to experiment. |
-| Kiosk | uart or quadrature | sum or average | Save settings to flash once. |
+| Scenario | Typical input_mode | Typical logic_mode | output_mode | Notes |
+|----------|--------------------|--------------------|-------------|-------|
+| Accessibility (multiple small inputs) | uart or quadrature | sum | combined | Increase amplify. |
+| Collaborative (shared cursor) | uart | sum or average | combined | num_mice = number of users. |
+| Precision (combined DPI) | uart | sum | combined | Tune amplify. |
+| Salvaged ball mice | quadrature | sum | combined | Set quad_scale. |
+| Six separate cursors | uart | (any) | separate | One HID mouse per input. |
+| Testing / try modes | uart or both | any | combined or separate | Use scripts/send_settings.py, --no-save to experiment. |
+| Kiosk | uart or quadrature | sum or average | combined | Save settings to flash once. |
 
 For build and wiring details, see **README.md**. For config field reference, see **Configuration reference** in README.

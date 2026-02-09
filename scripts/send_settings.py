@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-Send runtime settings to the Pico over UART (setting file on device).
-Reads config.yaml by default; optional CLI overrides. Use --no-save to apply
+Send runtime settings to the Pico over UART or USB CDC (setting file on device).
+Reads config/config.yaml by default; optional CLI overrides. Use --no-save to apply
 in RAM only (lost on reboot); default is to save to flash.
 
-  python3 send_settings.py --port /dev/ttyACM0
-  python3 send_settings.py --port /dev/tty.usbmodem101 --num-mice 4 --save
+  python3 scripts/send_settings.py --port /dev/ttyACM0
+  python3 scripts/send_settings.py --port /dev/cu.usbmodem101 --num-mice 4 --save
 """
 from pathlib import Path
 import argparse
 import re
 import sys
 
-CONFIG_YAML = Path(__file__).resolve().parent / "config.yaml"
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG_YAML = ROOT / "config" / "config.yaml"
 
 LOGIC_MODES = {
     "sum": 0, "average": 1, "max": 2,
